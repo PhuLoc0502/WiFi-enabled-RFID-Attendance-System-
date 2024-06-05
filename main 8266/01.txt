@@ -1,0 +1,97 @@
+#include <Arduino.h>
+#include <WiFiClient.h>
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+#include <ESP8266WebServer.h>
+#include <SoftwareSerial.h>
+
+#define TX_PIN 4 // D2
+#define RX_PIN 5 // D1
+SoftwareSerial mySerial(RX_PIN, TX_PIN);
+
+char buffer[14];
+int count = 0;
+
+const char *ssid = "POCO X3 Pro";
+const char *password = "0916827292";
+const char *mqtt_server = "192.168.209.135";
+const int mqtt_port = 1883;
+const char *mqtt_id = "esp8266";
+const char *topic_subscribe = "to-esp8266";
+const char *topic_publish = "from-esp8266";
+
+WiFiClient client;
+PubSubClient mqtt_client(client);
+
+void callback(char *topic, byte *payload, unsigned int length)
+{
+  Serial.print("Recived data from: ");
+  Serial.println(topic);
+  Serial.print("Message: ");
+  for (size_t i = 0; i < length; i++)
+  {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+  Serial.println("------------------------------------------");
+}
+
+void setup()
+{
+  Serial.begin(9600);
+  mySerial.begin(9600);
+  Serial.print(ssid);
+  Serial.println();
+  WiFi.begin(ssid, password);
+  WiFi.reconnect();
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.print("\nConnected to Wifi ");
+  Serial.println(ssid);
+  Serial.print("IP Address: ");
+  Serial.print(WiFi.localIP());
+  Serial.println();
+  delay(1000);
+
+  mqtt_client.setServer(mqtt_server, mqtt_port);
+  mqtt_client.setCallback(callback);
+
+  Serial.println("Connecting to mqtt... ");
+  while (!mqtt_client.connect(mqtt_id))
+  {
+    delay(500);
+  }
+  Serial.println("Connected to mqtt ");
+   mqtt_client.subscribe("to-esp8266");
+   mqtt_client.publish("from-esp8266", "cDATA");
+}
+
+
+
+void loop()
+{
+  if (Serial.available()) {
+    char CD = Serial.read();
+    mySerial.write(CD);
+    }
+   // Nếu có dữ liệu từ cổng nối tiếp mềm, gửi nó sang cổng nối tiếp cứng
+  if (mySerial.available()) {
+    char CD = mySerial.read();
+    // Serial.write(CD);   
+      buffer[count++] = CD;
+      if (count == 13) {
+      mqtt_client.publish("from-esp8266", buffer);
+      Serial.printf("Card's UID is : ");
+      Serial.println(buffer);
+      Serial.print("\n");
+      count = 0;
+    }
+  } 
+  mqtt_client.loop();
+  }
+  
+
+
